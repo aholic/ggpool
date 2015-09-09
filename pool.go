@@ -186,3 +186,19 @@ func (p *GGConnPool) Put(ggc *GGConn) error {
 
 	return nil
 }
+
+func (p *GGConnPool) Release() {
+	p.Lock()
+	defer p.Unlock()
+
+	var next *list.Element
+	for _, clist := range p.conns {
+		for itr := clist.Front(); itr != clist.Back(); itr = next {
+			next = itr.Next()
+			conn := itr.Value.(*GGConn)
+			if conn.State() == StateIdle {
+				conn.Close()
+			}
+		}
+	}
+}
