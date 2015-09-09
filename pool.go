@@ -3,10 +3,11 @@ package ggpool
 import (
 	"container/list"
 	"fmt"
-	"ggtimer"
 	"net"
 	"sync"
 	"time"
+
+	ggtimer "github.com/aholic/ggtimer"
 )
 
 type ConnState int
@@ -114,11 +115,11 @@ func (p *GGConnPool) Get(target string) (ggc *GGConn, err error) {
 
 		// find an idle connection, remove it from list and return this connection
 		if ggc.lockedState() == StateIdle {
-			defer ggc.Unlock()
-
 			// stop the read goroutine
 			ggc.SetDeadline(time.Now())
+			ggc.Unlock()
 			<-ggc.ready
+			ggc.Lock()
 
 			ggc.lockedSetState(StateRunning)
 			ggc.idleTimer.Close()
@@ -155,14 +156,14 @@ func (p *GGConnPool) Put(ggc *GGConn) error {
 	ggc.idleTimer = ggtimer.NewTimer(p.idleTimeout, func(time.Time) {
 		// a closed connection will not be used again, so, no need to hold the lock
 		ggc.SetState(StateClosed)
-		ggc.idleTimer.Close()
 		ggc.Close()
 	})
 
 	go func() {
 		ggc.SetDeadline(time.Time{})
 		_, err := ggc.Read(make([]byte, 1))
-		if nerr, ok := err.(net.Error); (!ok || !nerr.Timeout()) && ggc.State() != StateClosed {
+		if nerr, ok := err.(net.Error); ok && nerr.Timeout() && ggc.State() == StateIdle {
+		} else {
 			ggc.SetState(StateClosed)
 			ggc.idleTimer.Close()
 			ggc.Close()
