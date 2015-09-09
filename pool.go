@@ -133,7 +133,6 @@ func (p *GGConnPool) Get(target string) (ggc *GGConn, err error) {
 		}
 
 		// find a closed one, just remove it
-		ggc.idleTimer.Close()
 		connList.Remove(itr)
 		ggc.Unlock()
 	}
